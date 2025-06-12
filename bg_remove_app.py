@@ -1,22 +1,29 @@
 import os
 import tkinter as tk
-from tkinter import messagebox
+from tkinter import messagebox, colorchooser
 from rembg import remove
-from PIL import Image
+from PIL import Image, ImageColor
 from io import BytesIO
 
-# Set working directory to script location (important for .exe builds)
+# Set working directory to script location
 os.chdir(os.path.dirname(os.path.abspath(__file__)))
 
 class BGRemoverApp:
     def __init__(self, root):
         self.root = root
         self.root.title("Smart Background Remover")
-        self.root.geometry("420x480")
+        self.root.geometry("420x520")
 
         # Transparent checkbox
         self.transparent_var = tk.BooleanVar(value=True)
         tk.Checkbutton(root, text="Transparent background", variable=self.transparent_var).pack(pady=5)
+
+        # Background color button (only when not transparent)
+        self.bg_color = "#ffffff"  # default to white
+        self.color_button = tk.Button(root, text="Choose Background Color", command=self.pick_color)
+        self.color_button.pack(pady=5)
+        self.toggle_color_button()  # Set visibility
+        self.transparent_var.trace_add('write', lambda *args: self.toggle_color_button())
 
         # Target size selector
         tk.Label(root, text="Target Size").pack()
@@ -59,6 +66,18 @@ class BGRemoverApp:
             self.custom_frame.pack(pady=5)
         else:
             self.custom_frame.pack_forget()
+
+    def toggle_color_button(self):
+        if self.transparent_var.get():
+            self.color_button.pack_forget()
+        else:
+            self.color_button.pack(pady=5)
+
+    def pick_color(self):
+        color = colorchooser.askcolor(initialcolor=self.bg_color)
+        if color[1]:
+            self.bg_color = color[1]
+            self.color_button.config(bg=self.bg_color)
 
     def process_images(self):
         transparent = self.transparent_var.get()
@@ -121,7 +140,8 @@ class BGRemoverApp:
                 if transparent:
                     subject_img.save(out_path, format="PNG")
                 else:
-                    white_bg = Image.new("RGB", subject_img.size, (255, 255, 255))
+                    bg_rgb = ImageColor.getrgb(self.bg_color)
+                    white_bg = Image.new("RGB", subject_img.size, bg_rgb)
                     if subject_img.mode != "RGBA":
                         subject_img = subject_img.convert("RGBA")
                     try:
@@ -141,7 +161,6 @@ class BGRemoverApp:
         messagebox.showinfo("Done", f"Processed {len(files)} image(s).")
 
     def resize_and_center(self, img, target_size, transparent=True, side_pad_percent=0, top_pad_percent=0):
-        # Add padding before resizing
         pad_x = int(img.width * (side_pad_percent / 100))
         pad_y = int(img.height * (top_pad_percent / 100))
 
@@ -151,7 +170,6 @@ class BGRemoverApp:
         expanded.paste(img, (pad_x, pad_y), mask=img.getchannel("A"))
         img = expanded
 
-        # Resize with aspect ratio into target
         original_ratio = img.width / img.height
         target_w, target_h = target_size
 
@@ -164,9 +182,8 @@ class BGRemoverApp:
 
         img = img.resize((resize_w, resize_h), Image.LANCZOS)
 
-        # Final canvas and paste
         bg_mode = "RGBA" if transparent else "RGB"
-        bg_color = (0, 0, 0, 0) if transparent else (255, 255, 255)
+        bg_color = (0, 0, 0, 0) if transparent else ImageColor.getrgb(self.bg_color)
         canvas = Image.new(bg_mode, target_size, bg_color)
         offset = ((target_w - resize_w) // 2, (target_h - resize_h) // 2)
 
